@@ -1,6 +1,6 @@
 from sympy import symbols,expand
-from src.BinaryEncodings import standard_encode, gray_code
-from src.MatrixToPauliString import MatrixToPauliString
+from src.BinaryEncodings import *
+from src.MatrixToPauliString import *
 
 def test_standard_encoding():
     assert standard_encode(7,3) == '111'
