@@ -1,5 +1,5 @@
 from sympy import symbols, expand
-from src.utilities import *
+from src.sympy_utilities import *
 from collections import defaultdict
 
 
