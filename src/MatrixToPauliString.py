@@ -17,18 +17,17 @@ def basis_to_pauli_string(i, j, q):
         return 0.5*symbols('I^'+q) - 0.5*symbols('Z^'+q)
 
 
-
 class MatrixToPauliString:
     def __init__(self, matrix):
         self.matrix=matrix #row-col ordering, m[i][j] i-th row, j-th col
         self.N = len(self.matrix)
-        self.sum_of_paulis=0
+        self.pauli_strings=0
         self.pauli_terms = defaultdict(complex)
     
     def convert(self, encoding):
         for i in range(0, self.N):
             for j in range(0, self.N):
-                self.sum_of_paulis += self.convert_element(i, j, encoding)
+                self.pauli_strings += self.convert_element(i, j, encoding)
     
     def convert_element(self, i, j, encoding):
         nBinDigits = len(format(self.N-1,'b'))
@@ -43,9 +42,9 @@ class MatrixToPauliString:
     
     
     def pauli_strings_as_list(self):
-        self.sum_of_paulis = expand(self.sum_of_paulis)
+        self.pauli_strings = expand(self.pauli_strings)
         #goes through all terms in pauli_strings (aka all a_i in sum_i a_i)
-        for arg in self.sum_of_paulis.args:
+        for arg in self.pauli_strings.args:
             #each term is a product of a number * paulis, convert each elem to list
             arg_list=sympy_expr_to_list(arg)
 
