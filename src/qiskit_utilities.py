@@ -53,8 +53,6 @@ def pauli_dict_to_op(pd):
         for char in pstring[1:]:
             term = term^char_to_op[char]
         expr += coef.real*term
-        if(coef.imag!=0):
-            print("Your time evolution operator will not be unitary!")
     return expr
 
 def op_to_trotter(op, time):
