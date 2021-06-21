@@ -19,6 +19,7 @@ def pauli_string_to_dict(ps):
     ps = expand(ps)
     #goes through all terms in pauli_strings (aka all a_i in sum_i a_i)
     for arg in ps.args:
+        #print(arg)
         #each term is a product of a number * paulis, convert each elem to list
         arg_list=sympy_expr_to_list(arg)
 

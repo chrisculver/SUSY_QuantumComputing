@@ -1,6 +1,7 @@
 import src.HamiltonianTerms as hmats
 
 import sympy as sp
+import numpy as np
 
 
 p, q = sp.symbols('p, q', commutative=False)
@@ -15,8 +16,9 @@ qp_to_ada = {q: 0.5*sp.sqrt(2/m)*(a + adag),
 
 
 
-ada_matrices = {a*adag: sp.Matrix(hmats.a(5)*hmats.adag(5)),
-                adag*a: sp.Matrix(hmats.adag(5)*hmats.a(5))}
+
+#ada_matrices = {a*adag: sp.Matrix(hmats.a(5)*hmats.adag(5)),
+#                adag*a: sp.Matrix(hmats.adag(5)*hmats.a(5))}
 
 
 
@@ -33,24 +35,37 @@ def convert(expr):
 
 def convert_term_to_matrix(term):
     new_elem = 1
+    has_aadag = False
     for elem in term.args:
-        is_operator = False
         for i in sp.preorder_traversal(elem):
-            if( (i is a) or (i is adag) ):
-                is_operator = True
+            if( (i is a ) or (i is adag) ):
+                has_aadag=True
+    
+    if has_aadag:
+    
+        for elem in term.args:
+            is_operator = False
+            for i in sp.preorder_traversal(elem):
+                if( (i is a) or (i is adag) ):
+                    is_operator = True
                 
-        if is_operator:
-            lst = elem.args
+            if is_operator:
+                lst = elem.args
 
-            if(len(lst)>1):
-                for i in range(lst[1]):
-                    new_elem*=lst[0].subs(adaga_sub)
+                if(len(lst)>1):
+                    for i in range(lst[1]):
+                        new_elem*=lst[0].subs(adaga_sub)
+                else:
+                    new_elem*=elem.subs(adaga_sub)    
             else:
-                new_elem*=elem.subs(adaga_sub)
-        else:
-            new_elem*=elem
+                new_elem*=elem
         
-    return new_elem
+        return new_elem
+    
+    else:
+        for elem in term.args:
+            new_elem*=elem
+        return new_elem*sp.Matrix(np.eye(9))
 
 
     
