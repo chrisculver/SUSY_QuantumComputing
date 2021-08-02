@@ -1,4 +1,6 @@
 import src.HamiltonianTerms as hmats
+import src.MatrixToPauliString as mps
+from src.pauli_matrices import *
 
 import sympy as sp
 import numpy as np
@@ -10,30 +12,29 @@ b, bdag = sp.symbols('b, bd', commutative=False)
 
 m = sp.Symbol('m')
 g = sp.Symbol('g')
+mu = sp.Symbol('mu')
 
 qp_to_ada = {q: 0.5*sp.sqrt(2/m)*(a + adag), 
             p: complex(0,1)*sp.sqrt(2*m)*(adag - a)/2}
 
 
 
-
-#ada_matrices = {a*adag: sp.Matrix(hmats.a(5)*hmats.adag(5)),
-#                adag*a: sp.Matrix(hmats.adag(5)*hmats.a(5))}
-
+def adaga_sub(cutoff): 
+    return {a: sp.Matrix(hmats.a(cutoff)), adag: sp.Matrix(hmats.adag(cutoff))}
 
 
-adaga_sub = {a: sp.Matrix(hmats.a(9)), adag: sp.Matrix(hmats.adag(9))}
 
-
-def convert(expr):
-    new_expr = sp.Matrix(sp.zeros(9))
+def convert_to_matrix(expr, cutoff, buffer):
+    new_expr = sp.Matrix(sp.zeros(cutoff+buffer))
+    if(expr.args==()):
+        new_expr += convert_term_to_matrix(expr,cutoff+buffer)
     for elem in expr.args:
-        new_expr += convert_term_to_matrix(elem)
+        new_expr += convert_term_to_matrix(elem,cutoff+buffer)
 
     return new_expr
 
 
-def convert_term_to_matrix(term):
+def convert_term_to_matrix(term, cutoff):
     new_elem = 1
     has_aadag = False
     for elem in term.args:
@@ -42,7 +43,6 @@ def convert_term_to_matrix(term):
                 has_aadag=True
     
     if has_aadag:
-    
         for elem in term.args:
             is_operator = False
             for i in sp.preorder_traversal(elem):
@@ -54,23 +54,50 @@ def convert_term_to_matrix(term):
 
                 if(len(lst)>1):
                     for i in range(lst[1]):
-                        new_elem*=lst[0].subs(adaga_sub)
+                        new_elem*=lst[0].subs(adaga_sub(cutoff))
                 else:
-                    new_elem*=elem.subs(adaga_sub)    
+                    new_elem*=elem.subs(adaga_sub(cutoff))    
             else:
                 new_elem*=elem
         
         return new_elem
     
     else:
-        for elem in term.args:
-            new_elem*=elem
-        return new_elem*sp.Matrix(np.eye(9))
+        if(term.args==()):
+            new_elem*=term
+        else:
+            for elem in term.args:
+                new_elem*=elem
+        return new_elem*sp.Matrix(np.eye(cutoff))
 
+def commutation_rhs(fq):
+    return sp.Symbol('Z^'+str(fq))
+    
+class Hamiltonian():
+    def __init__(self, bosonic, fermionic, params, cutoff, encoding):
+        self.bosonic = bosonic
+        self.cutoff = cutoff
+        self.buffer = 16
 
-    
-    
-    
+        #let's just store the bosonic hamiltonian in all interesting forms
+        self.harmonic = sp.expand(self.bosonic.subs(qp_to_ada)).subs(params)
+        self.bmatrix = np.array(convert_to_matrix(self.harmonic, cutoff, self.buffer).tolist())[:-self.buffer,:-self.buffer]
+        self.bosonPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.bmatrix, encoding)))
+        
+        #print(self.bosonPauliStrings)
+        #now lets do the fermionic part
+        self.fermionic = fermionic.subs(qp_to_ada).subs(params)
+        #print(self.bosonPauliStrings)
+        self.fq = max_sympy_exponent(self.bosonPauliStrings)+1 
+        #sub in the bdag and b, not sure this always happens
+        self.fermionic_strings = sp.expand(self.fermionic.subs({b*bdag-bdag*b: commutation_rhs(self.fq)}))
+        self.fmatrix = np.array(convert_to_matrix(self.fermionic_strings, cutoff, self.buffer).tolist())[:-self.buffer,:-self.buffer]
+        self.fermionPauliStrings = sp.expand(mps.matrix_to_pauli_strings(self.fmatrix, encoding))
+        
+        self.pauliStrings = identity_qubit_padded_H(sp.expand(sp.N(self.bosonPauliStrings + self.fermionPauliStrings)))
+        self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
+        self.hamMatrix = getHamMat(self.pauliStrings)
+
     
     
     
@@ -116,3 +143,32 @@ def identity_qubit_padded_H(ham):
         new_h+=elem
         
     return new_h
+
+
+def getHamMat(pauliString):
+    Ndim=2**(max_sympy_exponent(pauliString.args[0])+1)
+    hamMat=np.zeros([Ndim,Ndim],dtype=complex)
+    for elem in pauliString.args:
+        #print(elem)
+        arg_list = sympy_expr_to_list(elem)
+        
+        coef = complex(arg_list[0])
+        paulis = [ '' for i in range(0,len(arg_list)-1) ]    
+        start = 1
+        if(len(str(arg_list[1]))==1):
+            coef*=1j
+            start=2
+            paulis.remove('')
+        
+        for ai in range(start, len(arg_list)):
+            symbol = str(arg_list[ai])
+            parts = symbol.split('^')
+            paulis[ int(parts[1]) ] = parts[0]
+        
+        res = pauliSymbolToMatrix[paulis[0]]
+        for p in paulis[1:]:
+            res = np.kron(res,pauliSymbolToMatrix[p])
+        
+        hamMat+=coef*res
+        
+    return hamMat
