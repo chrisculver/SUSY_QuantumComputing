@@ -24,18 +24,18 @@ def adaga_sub(cutoff):
 
 
 
-def convert_to_matrix(expr, cutoff, buffer):
-    new_expr = sp.Matrix(sp.zeros(cutoff+buffer))
+def convert_to_matrix(expr, cutoff):
+    new_expr = sp.Matrix(sp.zeros(cutoff))
     if(expr.args==()):
-        new_expr += convert_term_to_matrix(expr,cutoff+buffer)
+        new_expr += convert_term_to_matrix(expr,cutoff)
     for elem in expr.args:
-        new_expr += convert_term_to_matrix(elem,cutoff+buffer)
+        new_expr += convert_term_to_matrix(elem,cutoff)
 
     return new_expr
 
 
 def convert_term_to_matrix(term, cutoff):
-    new_elem = 1
+    new_elem = np.eye(cutoff)
     has_aadag = False
     for elem in term.args:
         for i in sp.preorder_traversal(elem):
@@ -54,21 +54,25 @@ def convert_term_to_matrix(term, cutoff):
 
                 if(len(lst)>1):
                     for i in range(lst[1]):
-                        new_elem*=lst[0].subs(adaga_sub(cutoff))
+                        new_elem=np.matmul(new_elem,lst[0].subs(adaga_sub(cutoff)))
                 else:
-                    new_elem*=elem.subs(adaga_sub(cutoff))    
+                    new_elem=np.matmul(new_elem,elem.subs(adaga_sub(cutoff))) 
             else:
-                new_elem*=elem
+                new_elem=elem*new_elem
         
         return new_elem
     
     else:
         if(term.args==()):
+            print(type(new_elem))
+            print(type(term))
             new_elem*=term
         else:
             for elem in term.args:
                 new_elem*=elem
         return new_elem*sp.Matrix(np.eye(cutoff))
+    
+
 
 def commutation_rhs(fq):
     return sp.Symbol('Z^'+str(fq))
@@ -81,7 +85,7 @@ class Hamiltonian():
 
         #let's just store the bosonic hamiltonian in all interesting forms
         self.harmonic = sp.expand(self.bosonic.subs(qp_to_ada)).subs(params)
-        self.bmatrix = np.array(convert_to_matrix(self.harmonic, cutoff, self.buffer).tolist())[:-self.buffer,:-self.buffer]
+        self.bmatrix = np.array(convert_to_matrix(self.harmonic, cutoff).tolist())
         self.bosonPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.bmatrix, encoding)))
         
         #print(self.bosonPauliStrings)
@@ -91,7 +95,7 @@ class Hamiltonian():
         self.fq = max_sympy_exponent(self.bosonPauliStrings)+1 
         #sub in the bdag and b, not sure this always happens
         self.fermionic_strings = sp.expand(self.fermionic.subs({b*bdag-bdag*b: commutation_rhs(self.fq)}))
-        self.fmatrix = np.array(convert_to_matrix(self.fermionic_strings, cutoff, self.buffer).tolist())[:-self.buffer,:-self.buffer]
+        self.fmatrix = np.array(convert_to_matrix(self.fermionic_strings, cutoff).tolist())
         self.fermionPauliStrings = sp.expand(mps.matrix_to_pauli_strings(self.fmatrix, encoding))
         
         self.pauliStrings = identity_qubit_padded_H(sp.expand(sp.N(self.bosonPauliStrings + self.fermionPauliStrings)))
