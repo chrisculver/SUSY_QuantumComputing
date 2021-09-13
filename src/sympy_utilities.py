@@ -5,6 +5,8 @@ from src.pauli_matrices import *
 import sympy as sp
 import numpy as np
 
+import copy
+
 
 p, q = sp.symbols('p, q', commutative=False)
 a, adag = sp.symbols('a, ad', commutative=False)
@@ -24,24 +26,33 @@ def adaga_sub(cutoff):
 
 
 
-def convert_to_matrix(expr, cutoff):
-    new_expr = sp.Matrix(sp.zeros(cutoff))
-    if(expr.args==()):
-        new_expr += convert_term_to_matrix(expr,cutoff)
-    for elem in expr.args:
-        new_expr += convert_term_to_matrix(elem,cutoff)
+def convert_to_matrix(expr, cutoff, buffer):
+    print(type(expr))
+    new_expr = sp.Matrix(sp.zeros(cutoff+buffer))
 
-    return new_expr
+    if type(expr)==sp.core.add.Add:
+        for elem in expr.args:
+            new_expr += convert_term_to_matrix(elem,cutoff+buffer)
+    elif type(expr)==sp.core.mul.Mul:
+        new_expr += convert_term_to_matrix(expr,cutoff+buffer)
+    elif type(expr)==sp.core.numbers.Float:
+        new_expr += convert_term_to_matrix(expr,cutoff+buffer)
+        
+        
+    return np.array(new_expr.tolist())[:-buffer,:-buffer]
 
 
 def convert_term_to_matrix(term, cutoff):
+    print('term={}'.format(term))
     new_elem = np.eye(cutoff)
     has_aadag = False
     for elem in term.args:
         for i in sp.preorder_traversal(elem):
+            print('i={} with type {}'.format(i,type(i)))
             if( (i is a ) or (i is adag) ):
                 has_aadag=True
     
+    print('has_aadag={}'.format(has_aadag))
     if has_aadag:
         for elem in term.args:
             is_operator = False
@@ -64,12 +75,10 @@ def convert_term_to_matrix(term, cutoff):
     
     else:
         if(term.args==()):
-            print(type(new_elem))
-            print(type(term))
-            new_elem*=term
+            new_elem=new_elem*term
         else:
             for elem in term.args:
-                new_elem*=elem
+                new_elem=new_elem*elem
         return new_elem*sp.Matrix(np.eye(cutoff))
     
 
@@ -81,27 +90,79 @@ class Hamiltonian():
     def __init__(self, bosonic, fermionic, params, cutoff, encoding):
         self.bosonic = bosonic
         self.cutoff = cutoff
+        #TODO: calculate the buffer...
         self.buffer = 16
 
         #let's just store the bosonic hamiltonian in all interesting forms
         self.harmonic = sp.expand(self.bosonic.subs(qp_to_ada)).subs(params)
-        self.bmatrix = np.array(convert_to_matrix(self.harmonic, cutoff).tolist())
+        self.bmatrix = convert_to_matrix(self.harmonic, cutoff, self.buffer)
         self.bosonPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.bmatrix, encoding)))
         
-        #print(self.bosonPauliStrings)
         #now lets do the fermionic part
         self.fermionic = fermionic.subs(qp_to_ada).subs(params)
-        #print(self.bosonPauliStrings)
+
         self.fq = max_sympy_exponent(self.bosonPauliStrings)+1 
         #sub in the bdag and b, not sure this always happens
-        self.fermionic_strings = sp.expand(self.fermionic.subs({b*bdag-bdag*b: commutation_rhs(self.fq)}))
-        self.fmatrix = np.array(convert_to_matrix(self.fermionic_strings, cutoff).tolist())
-        self.fermionPauliStrings = sp.expand(mps.matrix_to_pauli_strings(self.fmatrix, encoding))
         
-        self.pauliStrings = identity_qubit_padded_H(sp.expand(sp.N(self.bosonPauliStrings + self.fermionPauliStrings)))
-        self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
+        self.get_fermionic_matrix()
+        print(self.fmatrix)
+        self.fermionPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.fmatrix, encoding)))
+        print(self.fermionPauliStrings)
+    
+        self.pauliStrings=identity_qubit_padded(
+            self.bosonPauliStrings+self.fermionPauliStrings,self.fq)
         self.hamMatrix = getHamMat(self.pauliStrings)
+        
+        
+    
+        
+        #self.pauliStrings = identity_qubit_padded_H(sp.expand(sp.N(self.bosonPauliStrings + self.fermionPauliStrings)))
+        #self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
+        #self.hamMatrix = getHamMat(self.pauliStrings)
 
+    
+    
+    def get_fermionic_matrix(self):
+        fstrings = sp.expand(self.fermionic.subs({b*bdag-bdag*b: commutation_rhs(self.fq)}))
+        print(type(fstrings))
+        if type(fstrings)==sp.core.mul.Mul:
+            tmp=0
+            for e in fstrings.args:
+                if type(e) is sp.core.symbol.Symbol:
+                    if(e.name=='Z^'+str(self.fq)):
+                        tmp=e
+                        fstrings=fstrings/e
+                    elif (e.name=='X^'+str(self.fq)) or (e.name=='Y^'+str(self.fq)) or (e.name=='I^'+str(self.fq)):
+                        raise ValueError('Non Z pauli matrices have not been implemented')
+            
+            bosonic_mat=convert_to_matrix(fstrings, self.cutoff, self.buffer)
+            
+            fermionic_mat=pauliSymbolToMatrix[tmp.name.split('^')[0]]
+            self.fmatrix=np.kron(fermionic_mat,bosonic_mat)
+            
+            
+        elif type(fstrings)==sp.core.add.Add:
+            self.fmatrix=np.zeros([2**(self.fq+1),2**(self.fq+1)])
+            for term in fstrings.args:
+                tmp=0
+                t=copy.deepcopy(term)
+                for e in term.args:
+                    if type(e) is sp.core.symbol.Symbol:
+                        if(e.name=='Z^'+str(self.fq)):
+                            tmp=e
+                            t=t/e
+                        elif (e.name=='X^'+str(self.fq)) or (e.name=='Y^'+str(self.fq)) or (e.name=='I^'+str(self.fq)):
+                            raise ValueError('Non Z pauli matrices have not been implemented')
+                print(t)
+                bosonic_mat=convert_to_matrix(t, self.cutoff, self.buffer)
+                print(bosonic_mat)
+                fermionic_mat=pauliSymbolToMatrix[tmp.name.split('^')[0]]
+
+            self.fmatrix=self.fmatrix+np.kron(fermionic_mat,bosonic_mat)
+            
+                
+        else:
+            raise ValueError('Weird type passed')
     
     
     
@@ -125,35 +186,56 @@ def sympy_expr_to_list(expr):
 
     return arg_list
 
-def identity_qubit_padded_H(ham):
-    new_h = 0
+def identity_qubit_padded(ham,nqubits):    
+
+    qubits = [i for i in range(nqubits+1)]
     
-    qubits = [i for i in range(max_sympy_exponent(ham)+1)]
+    if type(ham)==sp.core.add.Add:
+        new_h = 0
+
+        for elem in ham.args:
+            qubits_with_pauli = []
+            for e in elem.free_symbols:
+                qubits_with_pauli.append(int(str(e).split('^')[1]))
+                
+            #np.setdiff1d doesn't seem to work
+            ids_to_pad = []
+            for qi in qubits:
+                if qi not in qubits_with_pauli:
+                    ids_to_pad.append(qi)
+        
+            for iden in ids_to_pad:
+                elem*=sp.Symbol('I^'+str(iden))
+            
+            new_h+=elem
+            
+        return new_h
+
     
-    for elem in ham.args:
-        qubits_with_pauli = []
-        for e in elem.free_symbols:
+    
+    elif type(ham)==sp.core.mul.Mul:
+        new_h = ham
+        qubits_with_pauli=[]
+        for e in ham.free_symbols:
             qubits_with_pauli.append(int(str(e).split('^')[1]))
             
-        #np.setdiff1d doesn't seem to work
-        ids_to_pad = []
+        ids_to_pad=[]
         for qi in qubits:
             if qi not in qubits_with_pauli:
                 ids_to_pad.append(qi)
-    
+        
         for iden in ids_to_pad:
-            elem*=sp.Symbol('I^'+str(iden))
-        
-        new_h+=elem
-        
-    return new_h
+            new_h*=sp.Symbol('I^'+str(iden))
 
+        return new_h
 
+    
+    
+    
 def getHamMat(pauliString):
     Ndim=2**(max_sympy_exponent(pauliString.args[0])+1)
     hamMat=np.zeros([Ndim,Ndim],dtype=complex)
     for elem in pauliString.args:
-        #print(elem)
         arg_list = sympy_expr_to_list(elem)
         
         coef = complex(arg_list[0])
