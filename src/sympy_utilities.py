@@ -27,7 +27,7 @@ def adaga_sub(cutoff):
 
 
 def convert_to_matrix(expr, cutoff, buffer):
-    print(type(expr))
+    
     new_expr = sp.Matrix(sp.zeros(cutoff+buffer))
 
     if type(expr)==sp.core.add.Add:
@@ -43,16 +43,14 @@ def convert_to_matrix(expr, cutoff, buffer):
 
 
 def convert_term_to_matrix(term, cutoff):
-    print('term={}'.format(term))
+
     new_elem = np.eye(cutoff)
     has_aadag = False
     for elem in term.args:
         for i in sp.preorder_traversal(elem):
-            print('i={} with type {}'.format(i,type(i)))
             if( (i is a ) or (i is adag) ):
                 has_aadag=True
     
-    print('has_aadag={}'.format(has_aadag))
     if has_aadag:
         for elem in term.args:
             is_operator = False
@@ -99,70 +97,32 @@ class Hamiltonian():
         self.bosonPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.bmatrix, encoding)))
         
         #now lets do the fermionic part
-        self.fermionic = fermionic.subs(qp_to_ada).subs(params)
+        self.fermionic = sp.expand(fermionic.subs(qp_to_ada).subs(params))
 
         self.fq = max_sympy_exponent(self.bosonPauliStrings)+1 
         #sub in the bdag and b, not sure this always happens
         
         self.get_fermionic_matrix()
-        print(self.fmatrix)
         self.fermionPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.fmatrix, encoding)))
-        print(self.fermionPauliStrings)
     
         self.pauliStrings=identity_qubit_padded(
             self.bosonPauliStrings+self.fermionPauliStrings,self.fq)
+        self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
         self.hamMatrix = getHamMat(self.pauliStrings)
         
         
     
         
         #self.pauliStrings = identity_qubit_padded_H(sp.expand(sp.N(self.bosonPauliStrings + self.fermionPauliStrings)))
-        #self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
         #self.hamMatrix = getHamMat(self.pauliStrings)
 
     
     
     def get_fermionic_matrix(self):
-        fstrings = sp.expand(self.fermionic.subs({b*bdag-bdag*b: commutation_rhs(self.fq)}))
-        print(type(fstrings))
-        if type(fstrings)==sp.core.mul.Mul:
-            tmp=0
-            for e in fstrings.args:
-                if type(e) is sp.core.symbol.Symbol:
-                    if(e.name=='Z^'+str(self.fq)):
-                        tmp=e
-                        fstrings=fstrings/e
-                    elif (e.name=='X^'+str(self.fq)) or (e.name=='Y^'+str(self.fq)) or (e.name=='I^'+str(self.fq)):
-                        raise ValueError('Non Z pauli matrices have not been implemented')
-            
-            bosonic_mat=convert_to_matrix(fstrings, self.cutoff, self.buffer)
-            
-            fermionic_mat=pauliSymbolToMatrix[tmp.name.split('^')[0]]
-            self.fmatrix=np.kron(fermionic_mat,bosonic_mat)
-            
-            
-        elif type(fstrings)==sp.core.add.Add:
-            self.fmatrix=np.zeros([2**(self.fq+1),2**(self.fq+1)])
-            for term in fstrings.args:
-                tmp=0
-                t=copy.deepcopy(term)
-                for e in term.args:
-                    if type(e) is sp.core.symbol.Symbol:
-                        if(e.name=='Z^'+str(self.fq)):
-                            tmp=e
-                            t=t/e
-                        elif (e.name=='X^'+str(self.fq)) or (e.name=='Y^'+str(self.fq)) or (e.name=='I^'+str(self.fq)):
-                            raise ValueError('Non Z pauli matrices have not been implemented')
-                print(t)
-                bosonic_mat=convert_to_matrix(t, self.cutoff, self.buffer)
-                print(bosonic_mat)
-                fermionic_mat=pauliSymbolToMatrix[tmp.name.split('^')[0]]
-
-            self.fmatrix=self.fmatrix+np.kron(fermionic_mat,bosonic_mat)
-            
-                
-        else:
-            raise ValueError('Weird type passed')
+        mat=convert_to_matrix(self.fermionic,self.cutoff,self.buffer)
+        #print(mat)
+        self.fmatrix=-np.kron(pauliZ,mat)
+        
     
     
     
