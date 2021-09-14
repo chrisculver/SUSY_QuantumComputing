@@ -28,18 +28,23 @@ def adaga_sub(cutoff):
 
 def convert_to_matrix(expr, cutoff, buffer):
     
-    new_expr = sp.Matrix(sp.zeros(cutoff+buffer))
+    new_expr = np.zeros([cutoff+buffer,cutoff+buffer])
 
     if type(expr)==sp.core.add.Add:
         for elem in expr.args:
-            new_expr += convert_term_to_matrix(elem,cutoff+buffer)
+            new_expr = new_expr + convert_term_to_matrix(elem,cutoff+buffer)
+            
     elif type(expr)==sp.core.mul.Mul:
-        new_expr += convert_term_to_matrix(expr,cutoff+buffer)
+        tmp=convert_term_to_matrix(expr,cutoff+buffer)
+        new_expr = new_expr+tmp
+        
     elif type(expr)==sp.core.numbers.Float:
-        new_expr += convert_term_to_matrix(expr,cutoff+buffer)
+        new_expr = new_expr + convert_term_to_matrix(expr,cutoff+buffer)
+    else:
+        raise ValueError('Cannot convert type {} to matrix'.format(type(expr)))
         
         
-    return np.array(new_expr.tolist())[:-buffer,:-buffer]
+    return np.array(new_expr.tolist())[:cutoff,:cutoff]
 
 
 def convert_term_to_matrix(term, cutoff):
@@ -51,7 +56,7 @@ def convert_term_to_matrix(term, cutoff):
             if( (i is a ) or (i is adag) ):
                 has_aadag=True
     
-    if has_aadag:
+    if has_aadag and type(term)==sp.core.mul.Mul:
         for elem in term.args:
             is_operator = False
             for i in sp.preorder_traversal(elem):
@@ -61,15 +66,20 @@ def convert_term_to_matrix(term, cutoff):
             if is_operator:
                 lst = elem.args
 
-                if(len(lst)>1):
+                if(len(lst)>1): # this should handle pow?
                     for i in range(lst[1]):
                         new_elem=np.matmul(new_elem,lst[0].subs(adaga_sub(cutoff)))
                 else:
+
                     new_elem=np.matmul(new_elem,elem.subs(adaga_sub(cutoff))) 
             else:
+
                 new_elem=elem*new_elem
         
         return new_elem
+    
+    elif has_aadag and type(term)!=sp.core.mul.Mul:
+        raise ValueError('Havent implemented doing convert_to_matrix for type {}'.format(type(term)))
     
     else:
         if(term.args==()):
@@ -77,7 +87,7 @@ def convert_term_to_matrix(term, cutoff):
         else:
             for elem in term.args:
                 new_elem=new_elem*elem
-        return new_elem*sp.Matrix(np.eye(cutoff))
+        return new_elem*np.eye(cutoff)
     
 
 
