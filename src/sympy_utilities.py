@@ -115,16 +115,11 @@ class Hamiltonian():
         self.get_fermionic_matrix()
         self.fermionPauliStrings = sp.expand(sp.N(mps.matrix_to_pauli_strings(self.fmatrix, encoding)))
     
-        self.pauliStrings=identity_qubit_padded(
-            self.bosonPauliStrings+self.fermionPauliStrings,self.fq)
-        self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
-        self.hamMatrix = getHamMat(self.pauliStrings)
         
-        
-    
-        
-        #self.pauliStrings = identity_qubit_padded_H(sp.expand(sp.N(self.bosonPauliStrings + self.fermionPauliStrings)))
-        #self.hamMatrix = getHamMat(self.pauliStrings)
+        self.hamMatrix=np.kron(np.eye(2),self.bmatrix)+self.fmatrix
+        self.pauliStrings=sp.expand(mps.matrix_to_pauli_strings(self.hamMatrix,encoding))
+        self.qubitMatrix=getHamMat(self.pauliStrings)
+
 
     
     
