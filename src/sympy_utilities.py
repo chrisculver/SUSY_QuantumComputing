@@ -117,7 +117,8 @@ class Hamiltonian():
     
         
         self.hamMatrix=np.kron(np.eye(2),self.bmatrix)+self.fmatrix
-        self.pauliStrings=sp.expand(mps.matrix_to_pauli_strings(self.hamMatrix,encoding))
+        self.pauliStrings=sp.N(sp.expand(mps.matrix_to_pauli_strings(self.hamMatrix,encoding)))
+        self.pauliStrings = self.pauliStrings.xreplace(dict([(n,0) for n in self.pauliStrings.atoms(sp.Float) if abs(n) < 1e-12]))
         self.qubitMatrix=getHamMat(self.pauliStrings)
 
 
@@ -216,8 +217,8 @@ def getHamMat(pauliString):
             parts = symbol.split('^')
             paulis[ int(parts[1]) ] = parts[0]
         
-        res = pauliSymbolToMatrix[paulis[0]]
-        for p in paulis[1:]:
+        res = pauliSymbolToMatrix[paulis[len(paulis)-1]]
+        for p in reversed(paulis[:-1]):
             res = np.kron(res,pauliSymbolToMatrix[p])
         
         hamMat+=coef*res

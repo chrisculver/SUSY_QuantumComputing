@@ -8,10 +8,10 @@ def basis_to_pauli_string(i, j, q):
         return 0.5*symbols('I^'+q) + 0.5*symbols('Z^'+q)
 
     elif(i=='0' and j=='1'):
-        return 0.5*symbols('X^'+q) + 0.5*1j*symbols('Z^'+q)
+        return 0.5*symbols('X^'+q) + 0.5*1j*symbols('Y^'+q)
 
     elif(i=='1' and j=='0'):
-        return 0.5*symbols('X^'+q) - 0.5*1j*symbols('Z^'+q)
+        return 0.5*symbols('X^'+q) - 0.5*1j*symbols('Y^'+q)
 
     else:
         return 0.5*symbols('I^'+q) - 0.5*symbols('Z^'+q)
