@@ -1,5 +1,4 @@
 from sympy import symbols, expand
-from src.sympy_utilities import *
 from collections import defaultdict
 
 
@@ -41,33 +40,3 @@ def convert_element(elem, i, j, N, encoding):
         qubit_product *= basis_to_pauli_string(i_bin[q], j_bin[q], str(len(i_bin)-1-q))
             
     return elem*qubit_product
-
-
-
-    
-def getMatrix(pauliString):
-    Ndim=2**(max_sympy_exponent(pauliString.args[0])+1)
-    hamMat=np.zeros([Ndim,Ndim],dtype=complex)
-    for elem in pauliString.args:
-        arg_list = sympy_expr_to_list(elem)
-        
-        coef = complex(arg_list[0])
-        paulis = [ '' for i in range(0,len(arg_list)-1) ]    
-        start = 1
-        if(len(str(arg_list[1]))==1):
-            coef*=1j
-            start=2
-            paulis.remove('')
-        
-        for ai in range(start, len(arg_list)):
-            symbol = str(arg_list[ai])
-            parts = symbol.split('^')
-            paulis[ int(parts[1]) ] = parts[0]
-        
-        res = pauliSymbolToMatrix[paulis[len(paulis)-1]]
-        for p in reversed(paulis[:-1]):
-            res = np.kron(res,pauliSymbolToMatrix[p])
-        
-        hamMat+=coef*res
-        
-    return hamMat

@@ -1,5 +1,6 @@
 from src.MatrixToPauliString import *
 from src.BinaryEncodings import *
+from src.sympy_utilities import *
 
 import numpy as np
 import sympy as sp
