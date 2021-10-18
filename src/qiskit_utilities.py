@@ -1,4 +1,4 @@
-from qiskit.aqua.operators import I,X,Y,Z,Zero,PauliTrotterEvolution
+from qiskit.opflow import I,X,Y,Z,Zero,PauliTrotterEvolution
 from qiskit.circuit import Parameter
 
 from src.sympy_utilities import sympy_expr_to_list
