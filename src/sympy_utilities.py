@@ -99,7 +99,7 @@ class Hamiltonian():
     def __init__(self, bosonic, fermionic, params, cutoff, encoding):
         self.bosonic = bosonic
         self.cutoff = cutoff
-        #TODO: calculate the buffer...
+        #TODO: calculate the buffer...ensor charg
         self.buffer = 16
 
         #let's just store the bosonic hamiltonian in all interesting forms
