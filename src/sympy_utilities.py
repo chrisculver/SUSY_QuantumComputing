@@ -130,6 +130,17 @@ class Hamiltonian():
         #print(mat)
         self.fmatrix=-np.kron(pauliZ,mat)
         
+    def solve_exactly(self):
+        sol = np.linalg.eig(np.array(self.hamMatrix,dtype=float))
+        self.eigenvalues = sol[0]
+        self.eigenvectors = sol[1]
+        
+        idx = self.eigenvalues.argsort()
+        self.eigenvalues=self.eigenvalues[idx]
+        self.eigenvectors=self.eigenvectors[idx]
+        
+
+        
     
     
     
